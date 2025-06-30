@@ -1,95 +1,168 @@
-import { useState } from "react";
-import useLocalStorage from "../hooks/useLocalStorage";
+import React, { useState, useEffect } from 'react';
+import Button from './Button';
 
-function TaskManager() {
-  const [tasks, setTasks] = useLocalStorage("tasks", []);
-  const [input, setInput] = useState("");
-  const [filter, setFilter] = useState("all");
+/**
+ * Custom hook for managing tasks with localStorage persistence
+ */
+const useLocalStorageTasks = () => {
+  // Initialize state from localStorage or with empty array
+  const [tasks, setTasks] = useState(() => {
+    const savedTasks = localStorage.getItem('tasks');
+    return savedTasks ? JSON.parse(savedTasks) : [];
+  });
 
-  const addTask = () => {
-    if (input.trim() !== "") {
-      setTasks([...tasks, { text: input, completed: false }]);
-      setInput("");
+  // Update localStorage when tasks change
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
+
+  // Add a new task
+  const addTask = (text) => {
+    if (text.trim()) {
+      setTasks([
+        ...tasks,
+        {
+          id: Date.now(),
+          text,
+          completed: false,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     }
   };
 
-  const toggleTask = (index) => {
-    const newTasks = [...tasks];
-    newTasks[index].completed = !newTasks[index].completed;
-    setTasks(newTasks);
+  // Toggle task completion status
+  const toggleTask = (id) => {
+    setTasks(
+      tasks.map((task) =>
+        task.id === id ? { ...task, completed: !task.completed } : task
+      )
+    );
   };
 
-  const deleteTask = (index) => {
-    const newTasks = [...tasks];
-    newTasks.splice(index, 1);
-    setTasks(newTasks);
+  // Delete a task
+  const deleteTask = (id) => {
+    setTasks(tasks.filter((task) => task.id !== id));
   };
 
+  return { tasks, addTask, toggleTask, deleteTask };
+};
+
+/**
+ * TaskManager component for managing tasks
+ */
+const TaskManager = () => {
+  const { tasks, addTask, toggleTask, deleteTask } = useLocalStorageTasks();
+  const [newTaskText, setNewTaskText] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  // Filter tasks based on selected filter
   const filteredTasks = tasks.filter((task) => {
-    if (filter === "active") return !task.completed;
-    if (filter === "completed") return task.completed;
-    return true;
+    if (filter === 'active') return !task.completed;
+    if (filter === 'completed') return task.completed;
+    return true; // 'all' filter
   });
 
+  // Handle form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    addTask(newTaskText);
+    setNewTaskText('');
+  };
+
   return (
-    <div className="p-4 max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4">Task Manager</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h2 className="text-2xl font-bold mb-6">Task Manager</h2>
 
+      {/* Task input form */}
+      <form onSubmit={handleSubmit} className="mb-6">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTaskText}
+            onChange={(e) => setNewTaskText(e.target.value)}
+            placeholder="Add a new task..."
+            className="flex-grow px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+          />
+          <Button type="submit" variant="primary">
+            Add Task
+          </Button>
+        </div>
+      </form>
+
+      {/* Filter buttons */}
       <div className="flex gap-2 mb-4">
-        <input
-          className="border rounded px-2 py-1 w-full"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Enter a task"
-        />
-        <button className="bg-blue-600 text-white px-4 py-1 rounded" onClick={addTask}>
-          Add
-        </button>
+        <Button
+          variant={filter === 'all' ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setFilter('all')}
+        >
+          All
+        </Button>
+        <Button
+          variant={filter === 'active' ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setFilter('active')}
+        >
+          Active
+        </Button>
+        <Button
+          variant={filter === 'completed' ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setFilter('completed')}
+        >
+          Completed
+        </Button>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        {["all", "active", "completed"].map((type) => (
-          <button
-            key={type}
-            onClick={() => setFilter(type)}
-            className={`px-3 py-1 rounded border ${
-              filter === type ? "bg-blue-600 text-white" : "bg-gray-100"
-            }`}
-          >
-            {type.charAt(0).toUpperCase() + type.slice(1)}
-          </button>
-        ))}
-      </div>
-
+      {/* Task list */}
       <ul className="space-y-2">
-        {filteredTasks.map((task, index) => (
-          <li
-            key={index}
-            className="flex justify-between items-center bg-gray-100 p-2 rounded"
-          >
-            <span
-              className={`flex-1 ${
-                task.completed ? "line-through text-gray-500" : ""
-              }`}
-              onClick={() => toggleTask(index)}
-            >
-              {task.text}
-            </span>
-            <button
-              className="text-red-500 hover:underline ml-4"
-              onClick={() => deleteTask(index)}
-            >
-              Delete
-            </button>
+        {filteredTasks.length === 0 ? (
+          <li className="text-gray-500 dark:text-gray-400 text-center py-4">
+            No tasks found
           </li>
-          
-        ))}
+        ) : (
+          filteredTasks.map((task) => (
+            <li
+              key={task.id}
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700"
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={task.completed}
+                  onChange={() => toggleTask(task.id)}
+                  className="h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span
+                  className={`${
+                    task.completed ? 'line-through text-gray-500 dark:text-gray-400' : ''
+                  }`}
+                >
+                  {task.text}
+                </span>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => deleteTask(task.id)}
+                aria-label="Delete task"
+              >
+                Delete
+              </Button>
+            </li>
+          ))
+        )}
       </ul>
+
+      {/* Task stats */}
+      <div className="mt-6 text-sm text-gray-500 dark:text-gray-400">
+        <p>
+          {tasks.filter((task) => !task.completed).length} tasks remaining
+        </p>
+      </div>
     </div>
   );
-}
-<li
-  key={index}
-  className="flex justify-between items-center bg-gray-100 p-2 rounded dark:bg-gray-800 animate-fadeIn"></li>
+};
 
-export default TaskManager;
+export default TaskManager; 
